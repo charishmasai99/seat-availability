@@ -47,7 +47,9 @@ function App() {
     const room = rooms.find(r => r.id === id);
     const spaceLeft = room.capacity - room.currentAttendance;
     const assigned = Math.min(num, spaceLeft);
+
     modifyAttendance(id, assigned);
+    
     const remaining = num - assigned;
     if (remaining > 0) {
       setModal({ show: true, type: "split", message: `Allocated ${assigned} to ${room.name}. ${remaining} remaining.` });
@@ -66,9 +68,12 @@ function App() {
     } else if (type === 'student' && loginId && password) {
       setRole('user');
     } else {
-      alert("Invalid Credentials");
+      setModal({ show: true, message: "Invalid Credentials.", type: "error" });
     }
   };
+
+  const totalAtt = rooms.reduce((acc, r) => acc + r.currentAttendance, 0);
+  const totalCap = rooms.reduce((acc, r) => acc + r.capacity, 0);
 
   if (!role) {
     return (
@@ -84,34 +89,17 @@ function App() {
             <form className="auth-form" onSubmit={(e) => doLogin(e, authMode)}>
               <h3>{authMode.toUpperCase()} PORTAL</h3>
               <div className="input-group">
-                <input 
-                  type="text" 
-                  placeholder="ID" 
-                  value={loginId} 
-                  onChange={e => setLoginId(e.target.value)} 
-                  required 
-                />
-                <input 
-                  type="password" 
-                  placeholder="Password" 
-                  value={password} 
-                  onChange={e => setPassword(e.target.value)} 
-                  required 
-                />
+                <input type="text" placeholder="ID" value={loginId} onChange={e => setLoginId(e.target.value)} required />
+                <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required />
               </div>
               <button className="auth-btn" type="submit">Login</button>
-              <p onClick={() => {setAuthMode("select"); setLoginId(""); setPassword("");}} className="back-link">
-                Back
-              </p>
+              <p onClick={() => setAuthMode("select")} className="back-link">Back</p>
             </form>
           )}
         </div>
       </div>
     );
   }
-
-  const totalAtt = rooms.reduce((acc, r) => acc + r.currentAttendance, 0);
-  const totalCap = rooms.reduce((acc, r) => acc + r.capacity, 0);
 
   return (
     <div className="main-wrapper">
@@ -135,6 +123,7 @@ function App() {
             </button>
           ))}
         </div>
+
         <div className="session-widget">
           <label className="sidebar-label">ACTIVE SESSION</label>
           <div className="session-display">
@@ -143,13 +132,14 @@ function App() {
           </div>
           <button onClick={() => setSessionIdx(prev => (prev + 1) % 2)} className="switch-btn">Switch Session</button>
         </div>
+
         <div className="global-stats">
           <small className="sidebar-label" style={{color: 'rgba(255,255,255,0.6)'}}>BUILDING LOAD</small>
           <h2>{totalAtt} <span style={{fontSize:'14px', opacity: 0.7}}>/ {totalCap}</span></h2>
           <div className="progress-track" style={{height:'4px', background: 'rgba(255,255,255,0.1)'}}>
             <div className="progress-fill" style={{width:`${(totalAtt/totalCap)*100}%`, background: '#fff'}}></div>
           </div>
-          <button onClick={() => {setRole(null); setAuthMode("select"); setLoginId(""); setPassword("");}} className="logout-link">Logout System</button>
+          <button onClick={() => setRole(null)} className="logout-link">Logout System</button>
         </div>
       </aside>
 
@@ -157,7 +147,7 @@ function App() {
         <div className="allocation-hero">
             <label className="hero-label">Smart Waterfall Allocation</label>
             <div className="allocation-input-group">
-                <input type="number" placeholder="Enter students (e.g. 90)" value={requestCount} onChange={e => setRequestCount(e.target.value)} />
+                <input type="number" placeholder="Enter count (e.g. 90)" value={requestCount} onChange={e => setRequestCount(e.target.value)} />
                 <button className="hero-btn" onClick={() => setHighlights(rooms.filter(r => r.currentAttendance < r.capacity).map(r => r.id))}>Analyze Space</button>
             </div>
         </div>
