@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import "./App.css";
 
-// Use the same INITIAL_ROOMS array from your code...
 const INITIAL_ROOMS = [
   { id: 1, name: "G-8 CSE A", category: "Classroom", capacity: 72, currentAttendance: 0, status: "Available" },
   { id: 2, name: "G-9 CSE B", category: "Classroom", capacity: 72, currentAttendance: 0, status: "Available" },
@@ -24,11 +23,10 @@ function App() {
   const [requestCount, setRequestCount] = useState("");
   const [highlights, setHighlights] = useState([]);
   const [modal, setModal] = useState({ show: false, message: "", type: "info" });
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // Mobile toggle
   
+  const [authMode, setAuthMode] = useState("select"); 
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
-  const [authMode, setAuthMode] = useState("select");
 
   useEffect(() => {
     setRooms(prev => prev.map(r => {
@@ -102,11 +100,6 @@ function App() {
 
   return (
     <div className="main-wrapper">
-      {/* Mobile Toggle Button */}
-      <button className="mobile-toggle" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
-        {isMobileMenuOpen ? "✕ Close Menu" : "☰ Open Menu"}
-      </button>
-
       {modal.show && (
         <div className="modal-overlay">
           <div className={`modal-box ${modal.type}`}>
@@ -116,13 +109,12 @@ function App() {
         </div>
       )}
 
-      {/* Sidebar with dynamic class for mobile visibility */}
-      <aside className={`sidebar ${isMobileMenuOpen ? "open" : ""}`}>
+      <aside className="sidebar">
         <div className="sidebar-header">ClassOptima</div>
         <div className="filter-group">
           <label className="sidebar-label">ROOM CATEGORIES</label>
           {["All", "Classroom", "Lab", "Seminar Hall"].map(cat => (
-            <button key={cat} className={`filter-btn ${filter === cat ? "active" : ""}`} onClick={() => {setFilter(cat); setIsMobileMenuOpen(false);}}>
+            <button key={cat} className={`filter-btn ${filter === cat ? "active" : ""}`} onClick={() => setFilter(cat)}>
               <span>{cat === "All" ? "View All" : cat + "s"}</span>
               <span className="filter-badge">{cat === "All" ? rooms.length : rooms.filter(r => r.category === cat).length}</span>
             </button>
@@ -145,9 +137,6 @@ function App() {
           <button onClick={() => setRole(null)} className="logout-link">Logout System</button>
         </div>
       </aside>
-
-      {/* Overlay to close menu when clicking outside on mobile */}
-      {isMobileMenuOpen && <div className="menu-overlay" onClick={() => setIsMobileMenuOpen(false)}></div>}
 
       <main className="content">
         <div className="allocation-hero">
