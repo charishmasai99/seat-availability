@@ -70,7 +70,7 @@ function App() {
     return (
       <div className="login-screen">
         <div className="login-card">
-          <h1>ClassOptima</h1>
+          <h1 className="logo-text">ClassOptima</h1>
           {authMode === "select" ? (
             <div className="login-options">
               <button className="auth-btn" onClick={() => setAuthMode("admin")}>Administrator Login</button>
@@ -112,20 +112,25 @@ function App() {
           <label className="sidebar-label">ROOM CATEGORIES</label>
           {["All", "Classroom", "Lab", "Seminar Hall"].map(cat => (
             <button key={cat} className={`filter-btn ${filter === cat ? "active" : ""}`} onClick={() => setFilter(cat)}>
-              <span>{cat === "All" ? "View All" : cat + (cat === "All" ? "" : "s")}</span>
+              <span>{cat === "All" ? "View All" : cat + "s"}</span>
               <span className="filter-badge">{cat === "All" ? rooms.length : rooms.filter(r => r.category === cat).length}</span>
             </button>
           ))}
         </div>
         <div className="session-widget">
           <label className="sidebar-label">ACTIVE SESSION</label>
-          <div className="session-display"><span className="session-dot"></span><span className="session-name">{SESSIONS[sessionIdx]}</span></div>
+          <div className="session-display">
+            <span className="session-dot"></span>
+            <span className="session-name">{SESSIONS[sessionIdx]}</span>
+          </div>
           <button onClick={() => setSessionIdx(prev => (prev + 1) % 2)} className="switch-btn">Switch Session</button>
         </div>
         <div className="global-stats">
           <small className="sidebar-label" style={{color: 'rgba(255,255,255,0.6)'}}>BUILDING LOAD</small>
           <h2>{totalAtt} <span style={{fontSize:'14px', opacity: 0.7}}>/ {totalCap}</span></h2>
-          <div className="progress-track" style={{height:'4px', background: 'rgba(255,255,255,0.1)'}}><div className="progress-fill" style={{width:`${(totalAtt/totalCap)*100}%`, background: '#fff'}}></div></div>
+          <div className="progress-track" style={{height:'4px', background: 'rgba(255,255,255,0.1)'}}>
+            <div className="progress-fill" style={{width:`${(totalAtt/totalCap)*100}%`, background: '#fff'}}></div>
+          </div>
           <button onClick={() => setRole(null)} className="logout-link">Logout System</button>
         </div>
       </aside>
@@ -134,7 +139,7 @@ function App() {
         <div className="allocation-hero">
             <label className="hero-label">Smart Waterfall Allocation</label>
             <div className="allocation-input-group">
-                <input type="number" placeholder="Enter count" value={requestCount} onChange={e => setRequestCount(e.target.value)} />
+                <input type="number" placeholder="Enter students (e.g. 90)" value={requestCount} onChange={e => setRequestCount(e.target.value)} />
                 <button className="hero-btn" onClick={() => setHighlights(rooms.filter(r => r.currentAttendance < r.capacity).map(r => r.id))}>Analyze Space</button>
             </div>
         </div>
@@ -147,11 +152,11 @@ function App() {
                 <span className={`status-pill ${room.status.toLowerCase()}`}>{room.status}</span>
               </div>
               <div className="progress-track"><div className="progress-fill" style={{width:`${(room.currentAttendance/room.capacity)*100}%`}}></div></div>
-              <p>Occupancy: <b>{room.currentAttendance} / {room.capacity}</b></p>
+              <p className="occupancy-text">Occupancy: <b>{room.currentAttendance} / {room.capacity}</b></p>
               {highlights.includes(room.id) && <button className="btn-confirm" onClick={() => executeAllocation(room.id)}>Assign Part</button>}
               {role === 'admin' && (
                 <div className="admin-controls">
-                  <button className="btn-update" onClick={() => modifyAttendance(room.id, -1)}>- 1</button>
+                  <button className="btn-update" onClick={() => modifyAttendance(room.id, -1)}>− 1</button>
                   <button className="btn-update" onClick={() => modifyAttendance(room.id, 1)}>+ 1</button>
                 </div>
               )}
