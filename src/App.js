@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import "./App.css";
 
+// Use the same INITIAL_ROOMS array from your code...
 const INITIAL_ROOMS = [
   { id: 1, name: "G-8 CSE A", category: "Classroom", capacity: 72, currentAttendance: 0, status: "Available" },
   { id: 2, name: "G-9 CSE B", category: "Classroom", capacity: 72, currentAttendance: 0, status: "Available" },
@@ -23,11 +24,11 @@ function App() {
   const [requestCount, setRequestCount] = useState("");
   const [highlights, setHighlights] = useState([]);
   const [modal, setModal] = useState({ show: false, message: "", type: "info" });
-  const [isMenuOpen, setIsMenuOpen] = useState(false); // Mobile Menu Logic
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // Mobile toggle
   
-  const [authMode, setAuthMode] = useState("select"); 
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
+  const [authMode, setAuthMode] = useState("select");
 
   useEffect(() => {
     setRooms(prev => prev.map(r => {
@@ -54,10 +55,10 @@ function App() {
     modifyAttendance(id, assigned);
     const remaining = num - assigned;
     if (remaining > 0) {
-      setModal({ show: true, message: `Allocated ${assigned}. ${remaining} remaining.` });
+      setModal({ show: true, type: "split", message: `Allocated ${assigned}. ${remaining} remaining.` });
       setRequestCount(remaining.toString());
     } else {
-      setModal({ show: true, message: `Allocation complete!` });
+      setModal({ show: true, type: "success", message: `Allocation complete!` });
       setRequestCount("");
       setHighlights([]);
     }
@@ -74,9 +75,9 @@ function App() {
     return (
       <div className="login-screen">
         <div className="login-card">
-          <h1>ClassOptima</h1>
+          <h1 className="logo-text">ClassOptima</h1>
           {authMode === "select" ? (
-            <div className="login-stack">
+            <div className="login-options">
               <button className="auth-btn" onClick={() => setAuthMode("admin")}>Administrator Login</button>
               <button className="auth-btn secondary" onClick={() => setAuthMode("student")}>Student Login</button>
             </div>
@@ -96,50 +97,64 @@ function App() {
     );
   }
 
+  const totalAtt = rooms.reduce((acc, r) => acc + r.currentAttendance, 0);
+  const totalCap = rooms.reduce((acc, r) => acc + r.capacity, 0);
+
   return (
     <div className="main-wrapper">
-      {/* ☰ Button: Only visible on phones */}
-      <button className="menu-toggle-btn" onClick={() => setIsMenuOpen(!isMenuOpen)}>
-        {isMenuOpen ? "✕ Close" : "☰ Menu"}
+      {/* Mobile Toggle Button */}
+      <button className="mobile-toggle" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
+        {isMobileMenuOpen ? "✕ Close Menu" : "☰ Open Menu"}
       </button>
 
       {modal.show && (
         <div className="modal-overlay">
-          <div className="modal-box">
+          <div className={`modal-box ${modal.type}`}>
             <p>{modal.message}</p>
-            <button onClick={() => setModal({ ...modal, show: false })}>Continue</button>
+            <button className="modal-close-btn" onClick={() => setModal({ ...modal, show: false })}>Continue</button>
           </div>
         </div>
       )}
 
-      {/* Sidebar with dynamic active class */}
-      <aside className={`sidebar ${isMenuOpen ? "active" : ""}`}>
+      {/* Sidebar with dynamic class for mobile visibility */}
+      <aside className={`sidebar ${isMobileMenuOpen ? "open" : ""}`}>
         <div className="sidebar-header">ClassOptima</div>
         <div className="filter-group">
           <label className="sidebar-label">ROOM CATEGORIES</label>
           {["All", "Classroom", "Lab", "Seminar Hall"].map(cat => (
-            <button key={cat} className={`filter-btn ${filter === cat ? "active" : ""}`} onClick={() => { setFilter(cat); setIsMenuOpen(false); }}>
+            <button key={cat} className={`filter-btn ${filter === cat ? "active" : ""}`} onClick={() => {setFilter(cat); setIsMobileMenuOpen(false);}}>
               <span>{cat === "All" ? "View All" : cat + "s"}</span>
+              <span className="filter-badge">{cat === "All" ? rooms.length : rooms.filter(r => r.category === cat).length}</span>
             </button>
           ))}
         </div>
         <div className="session-widget">
-          <label className="sidebar-label">SESSION</label>
-          <div className="session-display"><b>{SESSIONS[sessionIdx]}</b></div>
-          <button onClick={() => setSessionIdx(prev => (prev + 1) % 2)} className="switch-btn">Switch</button>
+          <label className="sidebar-label">ACTIVE SESSION</label>
+          <div className="session-display">
+            <span className="session-dot"></span>
+            <span className="session-name">{SESSIONS[sessionIdx]}</span>
+          </div>
+          <button onClick={() => setSessionIdx(prev => (prev + 1) % 2)} className="switch-btn">Switch Session</button>
         </div>
-        <button onClick={() => setRole(null)} className="logout-link">Logout System</button>
+        <div className="global-stats">
+          <small className="sidebar-label" style={{color: 'rgba(255,255,255,0.6)'}}>BUILDING LOAD</small>
+          <h2>{totalAtt} <span style={{fontSize:'14px', opacity: 0.7}}>/ {totalCap}</span></h2>
+          <div className="progress-track" style={{height:'4px', background: 'rgba(255,255,255,0.1)'}}>
+            <div className="progress-fill" style={{width:`${(totalAtt/totalCap)*100}%`, background: '#fff'}}></div>
+          </div>
+          <button onClick={() => setRole(null)} className="logout-link">Logout System</button>
+        </div>
       </aside>
 
-      {/* Dark overlay when menu is open on mobile */}
-      {isMenuOpen && <div className="overlay" onClick={() => setIsMenuOpen(false)}></div>}
+      {/* Overlay to close menu when clicking outside on mobile */}
+      {isMobileMenuOpen && <div className="menu-overlay" onClick={() => setIsMobileMenuOpen(false)}></div>}
 
       <main className="content">
         <div className="allocation-hero">
             <label className="hero-label">Smart Waterfall Allocation</label>
             <div className="allocation-input-group">
-                <input type="number" placeholder="Count..." value={requestCount} onChange={e => setRequestCount(e.target.value)} />
-                <button className="hero-btn" onClick={() => setHighlights(rooms.filter(r => r.currentAttendance < r.capacity).map(r => r.id))}>Analyze</button>
+                <input type="number" placeholder="Enter students (e.g. 90)" value={requestCount} onChange={e => setRequestCount(e.target.value)} />
+                <button className="hero-btn" onClick={() => setHighlights(rooms.filter(r => r.currentAttendance < r.capacity).map(r => r.id))}>Analyze Space</button>
             </div>
         </div>
 
@@ -151,12 +166,12 @@ function App() {
                 <span className={`status-pill ${room.status.toLowerCase()}`}>{room.status}</span>
               </div>
               <div className="progress-track"><div className="progress-fill" style={{width:`${(room.currentAttendance/room.capacity)*100}%`}}></div></div>
-              <p>Occupancy: <b>{room.currentAttendance}/{room.capacity}</b></p>
-              {highlights.includes(room.id) && <button className="btn-confirm" onClick={() => executeAllocation(room.id)}>Assign</button>}
+              <p className="occupancy-text">Occupancy: <b>{room.currentAttendance} / {room.capacity}</b></p>
+              {highlights.includes(room.id) && <button className="btn-confirm" onClick={() => executeAllocation(room.id)}>Assign Part</button>}
               {role === 'admin' && (
                 <div className="admin-controls">
-                  <button onClick={() => modifyAttendance(room.id, -1)}>-1</button>
-                  <button onClick={() => modifyAttendance(room.id, 1)}>+1</button>
+                  <button className="btn-update" onClick={() => modifyAttendance(room.id, -1)}>− 1</button>
+                  <button className="btn-update" onClick={() => modifyAttendance(room.id, 1)}>+ 1</button>
                 </div>
               )}
             </div>
