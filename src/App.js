@@ -28,6 +28,55 @@ function App() {
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
 
+  // Logic for Predictive Load/Risk
+  const getRiskLevel = (room) => {
+    const ratio = room.currentAttendance / room.capacity;
+    if (ratio > 0.85) return { label: "High Risk", color: "#ef4444" };
+    if (ratio > 0.6) return { label: "Medium Risk", color: "#f59e0b" };
+    return { label: "Low Risk", color: "#22c55e" };
+  };
+
+  // Logic for Rule-Based Recommendation
+  const getRecommendation = () => {
+    const num = parseInt(requestCount);
+    if (!num || isNaN(num)) return null;
+    const bestFit = rooms
+      .filter(r => (r.capacity - r.currentAttendance) >= num)
+      .sort((a, b) => (a.capacity - a.currentAttendance) - (b.capacity - b.currentAttendance))[0];
+    return bestFit ? `Recommended: ${bestFit.name} (Optimal Fit)` : "Multiple rooms required.";
+  };
+
+  // Logic for Smart Auto-Allocate
+  const autoAllocate = () => {
+    let remaining = parseInt(requestCount);
+    if (!remaining || remaining <= 0) return alert("Please enter student count.");
+
+    const sortedRooms = [...rooms].sort((a, b) => 
+      (b.capacity - b.currentAttendance) - (a.capacity - a.currentAttendance)
+    );
+
+    let updatedRooms = [...rooms];
+    let tempRemaining = remaining;
+
+    updatedRooms = updatedRooms.map(room => {
+      const available = room.capacity - room.currentAttendance;
+      if (tempRemaining > 0 && available > 0) {
+        const toAssign = Math.min(available, tempRemaining);
+        tempRemaining -= toAssign;
+        return { ...room, currentAttendance: room.currentAttendance + toAssign, status: (room.currentAttendance + toAssign) >= room.capacity ? "Occupied" : "Available" };
+      }
+      return room;
+    });
+
+    setRooms(updatedRooms);
+    setRequestCount(tempRemaining > 0 ? tempRemaining.toString() : "");
+    setModal({ 
+      show: true, 
+      type: tempRemaining === 0 ? "success" : "info", 
+      message: tempRemaining === 0 ? "Smart Allocation Successful!" : `Partial allocation. ${tempRemaining} students remaining.` 
+    });
+  };
+
   useEffect(() => {
     setRooms(prev => prev.map(r => {
       const newPop = Math.floor(Math.random() * (r.capacity * 0.45));
@@ -38,7 +87,7 @@ function App() {
   const modifyAttendance = (id, delta) => {
     setRooms(prev => prev.map(r => {
       if (r.id === id) {
-        const next = Math.max(0, Math.min(r.capacity, r.currentAttendance + delta));
+        const next = Math.max(0, Math.min(r.capacity + 20, r.currentAttendance + delta)); // Allow slight overflow for anomaly test
         return { ...r, currentAttendance: next, status: next >= r.capacity ? "Occupied" : "Available" };
       }
       return r;
@@ -140,31 +189,47 @@ function App() {
 
       <main className="content">
         <div className="allocation-hero">
-            <label className="hero-label">Smart Waterfall Allocation</label>
+            <label className="hero-label">Intelligent Resource Allocation</label>
             <div className="allocation-input-group">
                 <input type="number" placeholder="Enter students (e.g. 90)" value={requestCount} onChange={e => setRequestCount(e.target.value)} />
                 <button className="hero-btn" onClick={() => setHighlights(rooms.filter(r => r.currentAttendance < r.capacity).map(r => r.id))}>Analyze Space</button>
+                <button className="hero-btn auto-btn" onClick={autoAllocate}>Auto-Allocate</button>
             </div>
+            {requestCount && <div className="recommendation-text">💡 {getRecommendation()}</div>}
         </div>
 
         <div className="room-grid">
-          {rooms.filter(r => filter === "All" || r.category === filter).map(room => (
-            <div key={room.id} className={`room-card ${highlights.includes(room.id) ? 'highlight' : ''}`}>
-              <div className="room-header">
-                <div><small className="card-cat">{room.category}</small><h3>{room.name}</h3></div>
-                <span className={`status-pill ${room.status.toLowerCase()}`}>{room.status}</span>
-              </div>
-              <div className="progress-track"><div className="progress-fill" style={{width:`${(room.currentAttendance/room.capacity)*100}%`}}></div></div>
-              <p className="occupancy-text">Occupancy: <b>{room.currentAttendance} / {room.capacity}</b></p>
-              {highlights.includes(room.id) && <button className="btn-confirm" onClick={() => executeAllocation(room.id)}>Assign Part</button>}
-              {role === 'admin' && (
-                <div className="admin-controls">
-                  <button className="btn-update" onClick={() => modifyAttendance(room.id, -1)}>− 1</button>
-                  <button className="btn-update" onClick={() => modifyAttendance(room.id, 1)}>+ 1</button>
+          {rooms.filter(r => filter === "All" || r.category === filter).map(room => {
+            const risk = getRiskLevel(room);
+            return (
+              <div key={room.id} className={`room-card ${highlights.includes(room.id) ? 'highlight' : ''}`}>
+                <div className="room-header">
+                  <div><small className="card-cat">{room.category}</small><h3>{room.name}</h3></div>
+                  <div className="status-container">
+                    <span className={`status-pill ${room.status.toLowerCase()}`}>{room.status}</span>
+                    <span className="risk-indicator" style={{color: risk.color}}>● {risk.label}</span>
+                  </div>
                 </div>
-              )}
-            </div>
-          ))}
+                <div className="progress-track">
+                  <div className="progress-fill" style={{width:`${(room.currentAttendance/room.capacity)*100}%`, background: risk.color}}></div>
+                </div>
+                <p className="occupancy-text">Occupancy: <b>{room.currentAttendance} / {room.capacity}</b></p>
+                
+                {/* Anomaly Detection UI */}
+                {room.currentAttendance > room.capacity && (
+                  <div className="anomaly-alert">⚠️ Capacity Anomaly Detected</div>
+                )}
+
+                {highlights.includes(room.id) && <button className="btn-confirm" onClick={() => executeAllocation(room.id)}>Assign Part</button>}
+                {role === 'admin' && (
+                  <div className="admin-controls">
+                    <button className="btn-update" onClick={() => modifyAttendance(room.id, -1)}>− 1</button>
+                    <button className="btn-update" onClick={() => modifyAttendance(room.id, 1)}>+ 1</button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </main>
     </div>
