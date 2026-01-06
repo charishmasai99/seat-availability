@@ -23,71 +23,99 @@ function App() {
   const [requestCount, setRequestCount] = useState("");
   const [highlights, setHighlights] = useState([]);
   const [modal, setModal] = useState({ show: false, message: "", type: "info" });
+  const [history, setHistory] = useState([]); // Enhancement: History Log
   
   const [authMode, setAuthMode] = useState("select"); 
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
 
-  // Logic for Predictive Load/Risk
+  // Logic: Smart Engine for Risk and Anomaly
   const getRiskLevel = (room) => {
     const ratio = room.currentAttendance / room.capacity;
-    if (ratio > 0.85) return { label: "High Risk", color: "#ef4444" };
-    if (ratio > 0.6) return { label: "Medium Risk", color: "#f59e0b" };
-    return { label: "Low Risk", color: "#22c55e" };
+    if (ratio > 0.85) return { label: "High Risk", class: "high", color: "#ef4444" };
+    if (ratio > 0.6) return { label: "Medium Risk", class: "medium", color: "#f59e0b" };
+    return { label: "Low Risk", class: "low", color: "#22c55e" };
   };
 
-  // Logic for Rule-Based Recommendation
+  // Logic: Rule-Based Recommendation Engine
   const getRecommendation = () => {
     const num = parseInt(requestCount);
     if (!num || isNaN(num)) return null;
     const bestFit = rooms
       .filter(r => (r.capacity - r.currentAttendance) >= num)
       .sort((a, b) => (a.capacity - a.currentAttendance) - (b.capacity - b.currentAttendance))[0];
-    return bestFit ? `Recommended: ${bestFit.name} (Optimal Fit)` : "Multiple rooms required.";
+    return bestFit ? `Recommended: ${bestFit.name} (Optimal Fit)` : "Consider Multi-room Allocation.";
   };
 
-  // Logic for Smart Auto-Allocate
+  // Logic: Smart Auto-Allocate (Greedy Algorithm)
   const autoAllocate = () => {
     let remaining = parseInt(requestCount);
     if (!remaining || remaining <= 0) return alert("Please enter student count.");
 
-    const sortedRooms = [...rooms].sort((a, b) => 
+    let tempRooms = [...rooms];
+    let tempRemaining = remaining;
+    let allocations = [];
+
+    // Sort by largest available space
+    const sortedRooms = [...tempRooms].sort((a, b) => 
       (b.capacity - b.currentAttendance) - (a.capacity - a.currentAttendance)
     );
 
-    let updatedRooms = [...rooms];
-    let tempRemaining = remaining;
-
-    updatedRooms = updatedRooms.map(room => {
+    const updatedRooms = tempRooms.map(room => {
       const available = room.capacity - room.currentAttendance;
       if (tempRemaining > 0 && available > 0) {
         const toAssign = Math.min(available, tempRemaining);
         tempRemaining -= toAssign;
-        return { ...room, currentAttendance: room.currentAttendance + toAssign, status: (room.currentAttendance + toAssign) >= room.capacity ? "Occupied" : "Available" };
+        allocations.push({ room: room.name, count: toAssign });
+        return { 
+          ...room, 
+          currentAttendance: room.currentAttendance + toAssign, 
+          status: (room.currentAttendance + toAssign) >= room.capacity ? "Occupied" : "Available" 
+        };
       }
       return room;
     });
 
     setRooms(updatedRooms);
+    
+    // Log the action to History
+    if (allocations.length > 0) {
+      const logEntry = {
+        time: new Date().toLocaleTimeString(),
+        details: allocations.map(a => `${a.count} to ${a.room}`).join(", ")
+      };
+      setHistory(prev => [logEntry, ...prev]);
+    }
+
     setRequestCount(tempRemaining > 0 ? tempRemaining.toString() : "");
     setModal({ 
       show: true, 
       type: tempRemaining === 0 ? "success" : "info", 
-      message: tempRemaining === 0 ? "Smart Allocation Successful!" : `Partial allocation. ${tempRemaining} students remaining.` 
+      message: tempRemaining === 0 ? "Auto-Allocation Complete!" : `Partial allocation made. ${tempRemaining} remaining.` 
     });
+  };
+
+  // Enhancement: Stress Test Simulation
+  const runStressTest = () => {
+    setRooms(prev => prev.map(r => ({
+      ...r,
+      currentAttendance: Math.floor(r.capacity * 0.92),
+      status: "Occupied"
+    })));
+    setModal({ show: true, type: "info", message: "Simulation Mode: All rooms set to 92% capacity." });
   };
 
   useEffect(() => {
     setRooms(prev => prev.map(r => {
       const newPop = Math.floor(Math.random() * (r.capacity * 0.45));
-      return { ...r, currentAttendance: newPop, status: newPop >= r.capacity ? "Occupied" : "Available" };
+      return { ...r, currentAttendance: newPop, status: "Available" };
     }));
   }, [sessionIdx]);
 
   const modifyAttendance = (id, delta) => {
     setRooms(prev => prev.map(r => {
       if (r.id === id) {
-        const next = Math.max(0, Math.min(r.capacity + 20, r.currentAttendance + delta)); // Allow slight overflow for anomaly test
+        const next = Math.max(0, r.currentAttendance + delta);
         return { ...r, currentAttendance: next, status: next >= r.capacity ? "Occupied" : "Available" };
       }
       return r;
@@ -99,7 +127,14 @@ function App() {
     const room = rooms.find(r => r.id === id);
     const spaceLeft = room.capacity - room.currentAttendance;
     const assigned = Math.min(num, spaceLeft);
+    
     modifyAttendance(id, assigned);
+    
+    setHistory(prev => [{
+      time: new Date().toLocaleTimeString(),
+      details: `Manual: ${assigned} students to ${room.name}`
+    }, ...prev]);
+
     const remaining = num - assigned;
     if (remaining > 0) {
       setModal({ show: true, type: "split", message: `Allocated ${assigned}. ${remaining} remaining.` });
@@ -160,6 +195,7 @@ function App() {
 
       <aside className="sidebar">
         <div className="sidebar-header">ClassOptima</div>
+        
         <div className="filter-group">
           <label className="sidebar-label">ROOM CATEGORIES</label>
           {["All", "Classroom", "Lab", "Seminar Hall"].map(cat => (
@@ -169,14 +205,21 @@ function App() {
             </button>
           ))}
         </div>
-        <div className="session-widget">
-          <label className="sidebar-label">ACTIVE SESSION</label>
-          <div className="session-display">
-            <span className="session-dot"></span>
-            <span className="session-name">{SESSIONS[sessionIdx]}</span>
+
+        <div className="history-section">
+          <label className="sidebar-label">ALLOCATION LOG</label>
+          <div className="log-container">
+            {history.length === 0 ? <small style={{opacity: 0.5}}>No recent actions</small> : 
+              history.map((h, i) => (
+                <div key={i} className="log-item">
+                  <span className="log-time">{h.time}</span>
+                  <span className="log-detail">{h.details}</span>
+                </div>
+              ))
+            }
           </div>
-          <button onClick={() => setSessionIdx(prev => (prev + 1) % 2)} className="switch-btn">Switch Session</button>
         </div>
+
         <div className="global-stats">
           <small className="sidebar-label" style={{color: 'rgba(255,255,255,0.6)'}}>BUILDING LOAD</small>
           <h2>{totalAtt} <span style={{fontSize:'14px', opacity: 0.7}}>/ {totalCap}</span></h2>
@@ -189,10 +232,13 @@ function App() {
 
       <main className="content">
         <div className="allocation-hero">
-            <label className="hero-label">Intelligent Resource Allocation</label>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+              <label className="hero-label">Intelligent Resource Management</label>
+              <button className="sim-btn" onClick={runStressTest}>Simulation Mode</button>
+            </div>
             <div className="allocation-input-group">
-                <input type="number" placeholder="Enter students (e.g. 90)" value={requestCount} onChange={e => setRequestCount(e.target.value)} />
-                <button className="hero-btn" onClick={() => setHighlights(rooms.filter(r => r.currentAttendance < r.capacity).map(r => r.id))}>Analyze Space</button>
+                <input type="number" placeholder="Enter students..." value={requestCount} onChange={e => setRequestCount(e.target.value)} />
+                <button className="hero-btn" onClick={() => setHighlights(rooms.filter(r => r.currentAttendance < r.capacity).map(r => r.id))}>Analyze</button>
                 <button className="hero-btn auto-btn" onClick={autoAllocate}>Auto-Allocate</button>
             </div>
             {requestCount && <div className="recommendation-text">💡 {getRecommendation()}</div>}
@@ -211,20 +257,21 @@ function App() {
                   </div>
                 </div>
                 <div className="progress-track">
-                  <div className="progress-fill" style={{width:`${(room.currentAttendance/room.capacity)*100}%`, background: risk.color}}></div>
+                  <div className={`progress-fill ${risk.class}`} style={{width:`${(room.currentAttendance/room.capacity)*100}%`}}></div>
                 </div>
                 <p className="occupancy-text">Occupancy: <b>{room.currentAttendance} / {room.capacity}</b></p>
                 
-                {/* Anomaly Detection UI */}
                 {room.currentAttendance > room.capacity && (
                   <div className="anomaly-alert">⚠️ Capacity Anomaly Detected</div>
                 )}
 
-                {highlights.includes(room.id) && <button className="btn-confirm" onClick={() => executeAllocation(room.id)}>Assign Part</button>}
+                {highlights.includes(room.id) && (
+                  <button className="btn-confirm" onClick={() => executeAllocation(room.id)}>Confirm Part</button>
+                )}
                 {role === 'admin' && (
                   <div className="admin-controls">
-                    <button className="btn-update" onClick={() => modifyAttendance(room.id, -1)}>− 1</button>
-                    <button className="btn-update" onClick={() => modifyAttendance(room.id, 1)}>+ 1</button>
+                    <button className="btn-update" onClick={() => modifyAttendance(room.id, -1)}>−</button>
+                    <button className="btn-update" onClick={() => modifyAttendance(room.id, 1)}>+</button>
                   </div>
                 )}
               </div>
