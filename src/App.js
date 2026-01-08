@@ -21,6 +21,7 @@ function App() {
   const [sessionIdx, setSessionIdx] = useState(0);
   const [filter, setFilter] = useState("All");
   const [requestCount, setRequestCount] = useState("");
+  const [highlights, setHighlights] = useState([]); 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [alert, setAlert] = useState({ show: false, message: "", type: "" });
   
@@ -39,50 +40,58 @@ function App() {
 
   const triggerAlert = (msg, type) => {
     setAlert({ show: true, message: msg, type: type });
-    setTimeout(() => setAlert({ show: false, message: "", type: "" }), 6000);
+    setTimeout(() => setAlert({ show: false, message: "", type: "" }), 5000);
   };
 
-  // AUTO-ALLOCATE (Waterfall Logic)
-  const handleAutoAllocate = () => {
-    let toAssign = parseInt(requestCount);
-    if (!toAssign || toAssign <= 0) return triggerAlert("Enter a valid number", "error");
+  // ANALYZE: Highlight rooms that can fit the count in one go
+  const handleAnalyze = () => {
+    const count = parseInt(requestCount);
+    if (!count || count <= 0) return triggerAlert("Enter a valid count to analyze", "error");
+    const matchingIds = rooms.filter(r => (r.capacity - r.currentAttendance) >= count).map(r => r.id);
+    setHighlights(matchingIds);
+    if (matchingIds.length === 0) triggerAlert("No single room fits this group. Try Auto Allocate!", "warning");
+  };
 
-    let totalRequested = toAssign;
+  // ADD HERE: Manually add students to a specific analyzed room
+  const accommodateInRoom = (id) => {
+    const count = parseInt(requestCount);
+    setRooms(prev => prev.map(r => {
+      if (r.id === id) {
+        const next = r.currentAttendance + count;
+        return { ...r, currentAttendance: next, status: next >= r.capacity ? "Occupied" : "Available" };
+      }
+      return r;
+    }));
+    setRequestCount("");
+    setHighlights([]);
+    triggerAlert("Students added to room successfully!", "success");
+  };
+
+  // WATERFALL (AUTO ALLOCATE): Fills rooms sequentially
+  const handleWaterfall = () => {
+    let toAssign = parseInt(requestCount);
+    if (!toAssign || toAssign <= 0) return triggerAlert("Enter count to Auto Allocate", "error");
+
     let details = [];
     let updatedRooms = [...rooms];
-
     for (let i = 0; i < updatedRooms.length; i++) {
-      let room = updatedRooms[i];
-      let space = room.capacity - room.currentAttendance;
-
+      let space = updatedRooms[i].capacity - updatedRooms[i].currentAttendance;
       if (toAssign > 0 && space > 0) {
         let taking = Math.min(space, toAssign);
         toAssign -= taking;
-        updatedRooms[i] = {
-          ...room,
-          currentAttendance: room.currentAttendance + taking,
-          status: (room.currentAttendance + taking) >= room.capacity ? "Occupied" : "Available"
-        };
-        details.push(`${room.name} (+${taking})`);
+        updatedRooms[i].currentAttendance += taking;
+        updatedRooms[i].status = updatedRooms[i].currentAttendance >= updatedRooms[i].capacity ? "Occupied" : "Available";
+        details.push(`${updatedRooms[i].name} (+${taking})`);
       }
-      if (toAssign === 0) break;
     }
-
     setRooms(updatedRooms);
     setRequestCount("");
-    if (toAssign === 0) {
-      triggerAlert(`Auto-Allocated ${totalRequested} students: ${details.join(", ")}`, "success");
-    } else {
-      triggerAlert(`Partial allocation. ${toAssign} students left (Venue Full).`, "warning");
-    }
+    triggerAlert(`Waterfall Complete: ${details.join(", ")}`, "success");
   };
 
-  // MANUAL ADDITION (Per Room)
-  const handleManualEntry = (id, val) => {
+  const handleManual = (id, val) => {
     const num = parseInt(val) || 0;
-    setRooms(prev => prev.map(r => 
-      r.id === id ? { ...r, currentAttendance: Math.min(num, r.capacity), status: num >= r.capacity ? "Occupied" : "Available" } : r
-    ));
+    setRooms(prev => prev.map(r => (r.id === id ? { ...r, currentAttendance: Math.min(num, r.capacity), status: num >= r.capacity ? "Occupied" : "Available" } : r)));
   };
 
   const doLogin = (e) => {
@@ -95,7 +104,6 @@ function App() {
   if (!role) {
     return (
       <div className="login-screen">
-        {alert.show && <div className={`global-alert ${alert.type}`}>{alert.message}</div>}
         <div className="login-card">
           <h1>ClassOptima</h1>
           <form onSubmit={doLogin}>
@@ -117,7 +125,7 @@ function App() {
     <div className={`app-container ${isSidebarOpen ? "sidebar-open" : ""}`}>
       {alert.show && <div className={`global-alert ${alert.type}`}>{alert.message}</div>}
       <button className="mobile-menu-btn" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>☰ Menu</button>
-
+      
       <aside className="sidebar">
         <h1 className="logo">ClassOptima</h1>
         <div className="sidebar-section">
@@ -139,14 +147,15 @@ function App() {
         <div className="terminal-header">
           <label>SMART ALLOCATION TERMINAL</label>
           <div className="flex-row">
-            <input type="number" placeholder="Enter students to auto-allocate..." value={requestCount} onChange={e => setRequestCount(e.target.value)} />
-            <button className="btn-auto" onClick={handleAutoAllocate}>Auto Allocate</button>
+            <input type="number" placeholder="Enter students..." value={requestCount} onChange={e => setRequestCount(e.target.value)} />
+            <button className="btn-analyze" onClick={handleAnalyze}>Analyze</button>
+            <button className="btn-auto" onClick={handleWaterfall}>Auto Allocate</button>
           </div>
         </div>
 
         <div className="room-grid">
           {rooms.filter(r => filter === "All" || r.category === filter).map(room => (
-            <div key={room.id} className="room-card">
+            <div key={room.id} className={`room-card ${highlights.includes(room.id) ? 'active-highlight' : ''}`}>
               <div className="card-top">
                 <h4>{room.name}</h4>
                 <span className={`status ${room.status.toLowerCase()}`}>{room.status}</span>
@@ -155,9 +164,9 @@ function App() {
                 <div className="fill" style={{ width: `${(room.currentAttendance/room.capacity)*100}%`, background: room.currentAttendance/room.capacity > 0.85 ? '#ef4444' : '#22c55e' }}></div>
               </div>
               <div className="manual-entry-row">
-                <label>Manual Update:</label>
-                <input type="number" value={room.currentAttendance} onChange={(e) => handleManualEntry(room.id, e.target.value)} disabled={role !== 'admin'} />
+                <input type="number" value={room.currentAttendance} onChange={(e) => handleManual(room.id, e.target.value)} disabled={role !== 'admin'} />
                 <span>/ {room.capacity}</span>
+                {highlights.includes(room.id) && <button className="add-here-btn" onClick={() => accommodateInRoom(room.id)}>Add Here</button>}
               </div>
             </div>
           ))}
