@@ -17,13 +17,12 @@ const SESSIONS = ["Morning Session", "Afternoon Session"];
 
 function App() {
   const [role, setRole] = useState(null); 
-  const [authMode, setAuthMode] = useState("select"); // Restored selection mode
+  const [authMode, setAuthMode] = useState("select"); 
   const [rooms, setRooms] = useState([]);
   const [sessionIdx, setSessionIdx] = useState(0);
   const [filter, setFilter] = useState("All");
   const [requestCount, setRequestCount] = useState("");
   const [highlights, setHighlights] = useState([]); 
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [alert, setAlert] = useState({ show: false, message: "", type: "" });
   
   const [loginId, setLoginId] = useState("");
@@ -41,7 +40,7 @@ function App() {
 
   const triggerAlert = (msg, type) => {
     setAlert({ show: true, message: msg, type: type });
-    setTimeout(() => setAlert({ show: false, message: "", type: "" }), 6000);
+    setTimeout(() => setAlert({ show: false, message: "", type: "" }), 5000);
   };
 
   const handleAnalyze = () => {
@@ -72,7 +71,7 @@ function App() {
     setRooms(updatedRooms);
     setRequestCount("");
     setHighlights([]);
-    triggerAlert(`Waterfall Successful: ${details.join(", ")}`, "success");
+    triggerAlert(`Allocation: ${details.join(", ")}`, "success");
   };
 
   const doLogin = (e, mode) => {
@@ -82,7 +81,6 @@ function App() {
     else alert("Invalid Credentials");
   };
 
-  // RESTORED LOGIN PORTAL
   if (!role) {
     return (
       <div className="login-screen">
@@ -95,14 +93,14 @@ function App() {
             </div>
           ) : (
             <form onSubmit={(e) => doLogin(e, authMode)}>
-              <h3>{authMode === 'admin' ? 'ORGANIZER' : 'ATTENDEE'} LOGIN</h3>
+              <h3>{authMode.toUpperCase()} LOGIN</h3>
               <input type="text" placeholder="ID" value={loginId} onChange={e => setLoginId(e.target.value)} required />
               <div className="password-wrapper">
                 <input type={showPassword ? "text" : "password"} placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required />
                 <button type="button" onClick={() => setShowPassword(!showPassword)}>{showPassword ? "Hide" : "Show"}</button>
               </div>
               <button className="auth-btn" type="submit">Login</button>
-              <p className="back-link" onClick={() => setAuthMode("select")}>← Back to Selection</p>
+              <p className="back-link" onClick={() => setAuthMode("select")}>← Back</p>
             </form>
           )}
         </div>
@@ -111,21 +109,28 @@ function App() {
   }
 
   return (
-    <div className={`app-container ${isSidebarOpen ? "sidebar-open" : ""}`}>
+    <div className="app-container">
       {alert.show && <div className={`global-alert ${alert.type}`}>{alert.message}</div>}
-      <button className="mobile-menu-btn" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>☰ Menu</button>
       
       <aside className="sidebar">
         <h1 className="logo">ClassOptima</h1>
-        <div className="session-card">
-          <p>{SESSIONS[sessionIdx]}</p>
-          <button onClick={() => setSessionIdx(prev => (prev + 1) % 2)}>Switch</button>
+        <div className="sidebar-section">
+          <label>SESSION</label>
+          <div className="session-card">
+            <span>{SESSIONS[sessionIdx]}</span>
+            <button onClick={() => setSessionIdx(prev => (prev + 1) % 2)}>Switch</button>
+          </div>
         </div>
         <nav className="filter-nav">
+          <label>CATEGORIES</label>
           {["All", "Classroom", "Lab", "Seminar Hall"].map(cat => (
-            <button key={cat} className={filter === cat ? "active" : ""} onClick={() => {setFilter(cat); setIsSidebarOpen(false);}}>{cat}</button>
+            <button key={cat} className={filter === cat ? "active" : ""} onClick={() => setFilter(cat)}>{cat}</button>
           ))}
         </nav>
+        <div className="venue-load">
+            <small>TOTAL VENUE LOAD</small>
+            <h2>{rooms.reduce((a,b)=>a+b.currentAttendance,0)} / 728</h2>
+        </div>
         <button className="logout-btn" onClick={() => setRole(null)}>Logout</button>
       </aside>
 
@@ -143,18 +148,20 @@ function App() {
           {rooms.filter(r => filter === "All" || r.category === filter).map(room => (
             <div key={room.id} className={`room-card ${highlights.includes(room.id) ? 'active-highlight' : ''}`}>
               <div className="card-top">
-                <h4>{room.name}</h4>
+                <div><small>{room.category}</small><h4>{room.name}</h4></div>
                 <span className={`status ${room.status.toLowerCase()}`}>{room.status}</span>
               </div>
               <div className="progress-bar">
                 <div className="fill" style={{ width: `${(room.currentAttendance/room.capacity)*100}%`, background: room.currentAttendance/room.capacity > 0.85 ? '#ef4444' : '#22c55e' }}></div>
               </div>
-              <div className="manual-entry-row">
-                <input type="number" value={room.currentAttendance} onChange={(e) => {
-                  const val = Math.min(parseInt(e.target.value) || 0, room.capacity);
-                  setRooms(prev => prev.map(r => r.id === room.id ? {...r, currentAttendance: val, status: val >= r.capacity ? 'Occupied' : 'Available'} : r));
-                }} disabled={role !== 'admin'} />
-                <span>/ {room.capacity}</span>
+              <div className="card-footer">
+                <div className="manual-input">
+                  <input type="number" value={room.currentAttendance} onChange={(e) => {
+                    const val = Math.min(parseInt(e.target.value) || 0, room.capacity);
+                    setRooms(prev => prev.map(r => r.id === room.id ? {...r, currentAttendance: val, status: val >= r.capacity ? 'Occupied' : 'Available'} : r));
+                  }} disabled={role !== 'admin'} />
+                  <span>/ {room.capacity}</span>
+                </div>
                 {highlights.includes(room.id) && (
                   <button className="add-here-btn" onClick={() => handleWaterfall(room.id)}>Add Here</button>
                 )}
