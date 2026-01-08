@@ -29,6 +29,7 @@ function App() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
+  // Initialize with Random Strengths on load and session change
   useEffect(() => {
     const randomized = INITIAL_ROOMS.map(room => ({
       ...room,
@@ -36,46 +37,40 @@ function App() {
       status: "Available"
     }));
     setRooms(randomized);
+    setHighlights([]);
   }, [sessionIdx]);
 
   const triggerAlert = (msg, type) => {
     setAlert({ show: true, message: msg, type: type });
-    setTimeout(() => setAlert({ show: false, message: "", type: "" }), 5000);
+    setTimeout(() => setAlert({ show: false, message: "", type: "" }), 6000);
   };
 
-  // ANALYZE: Highlight rooms that can fit the count in one go
+  // ANALYZE: Highlight all rooms with available space
   const handleAnalyze = () => {
     const count = parseInt(requestCount);
-    if (!count || count <= 0) return triggerAlert("Enter a valid count to analyze", "error");
-    const matchingIds = rooms.filter(r => (r.capacity - r.currentAttendance) >= count).map(r => r.id);
-    setHighlights(matchingIds);
-    if (matchingIds.length === 0) triggerAlert("No single room fits this group. Try Auto Allocate!", "warning");
+    if (!count || count <= 0) return triggerAlert("Enter students to analyze", "error");
+    
+    const availableIds = rooms
+      .filter(r => r.currentAttendance < r.capacity)
+      .map(r => r.id);
+    
+    setHighlights(availableIds);
+    triggerAlert(`Analyze complete. Select 'Add Here' on a room to start waterfall for ${count} students.`, "success");
   };
 
-  // ADD HERE: Manually add students to a specific analyzed room
-  const accommodateInRoom = (id) => {
-    const count = parseInt(requestCount);
-    setRooms(prev => prev.map(r => {
-      if (r.id === id) {
-        const next = r.currentAttendance + count;
-        return { ...r, currentAttendance: next, status: next >= r.capacity ? "Occupied" : "Available" };
-      }
-      return r;
-    }));
-    setRequestCount("");
-    setHighlights([]);
-    triggerAlert("Students added to room successfully!", "success");
-  };
-
-  // WATERFALL (AUTO ALLOCATE): Fills rooms sequentially
-  const handleWaterfall = () => {
+  // WATERFALL LOGIC: Fills rooms sequentially starting from a specific ID
+  const handleWaterfallAllocation = (startId) => {
     let toAssign = parseInt(requestCount);
-    if (!toAssign || toAssign <= 0) return triggerAlert("Enter count to Auto Allocate", "error");
+    if (!toAssign) return triggerAlert("Enter a count first", "error");
 
     let details = [];
     let updatedRooms = [...rooms];
-    for (let i = 0; i < updatedRooms.length; i++) {
-      let space = updatedRooms[i].capacity - updatedRooms[i].currentAttendance;
+    const startIndex = updatedRooms.findIndex(r => r.id === startId);
+
+    for (let i = startIndex; i < updatedRooms.length; i++) {
+      let room = updatedRooms[i];
+      let space = room.capacity - room.currentAttendance;
+
       if (toAssign > 0 && space > 0) {
         let taking = Math.min(space, toAssign);
         toAssign -= taking;
@@ -83,13 +78,21 @@ function App() {
         updatedRooms[i].status = updatedRooms[i].currentAttendance >= updatedRooms[i].capacity ? "Occupied" : "Available";
         details.push(`${updatedRooms[i].name} (+${taking})`);
       }
+      if (toAssign === 0) break;
     }
+
     setRooms(updatedRooms);
     setRequestCount("");
-    triggerAlert(`Waterfall Complete: ${details.join(", ")}`, "success");
+    setHighlights([]);
+
+    if (toAssign === 0) {
+      triggerAlert(`Waterfall Successful: ${details.join(", ")}`, "success");
+    } else {
+      triggerAlert(`Partial Success: ${details.join(", ")}. ${toAssign} students remaining.`, "warning");
+    }
   };
 
-  const handleManual = (id, val) => {
+  const handleManualUpdate = (id, val) => {
     const num = parseInt(val) || 0;
     setRooms(prev => prev.map(r => (r.id === id ? { ...r, currentAttendance: Math.min(num, r.capacity), status: num >= r.capacity ? "Occupied" : "Available" } : r)));
   };
@@ -107,12 +110,10 @@ function App() {
         <div className="login-card">
           <h1>ClassOptima</h1>
           <form onSubmit={doLogin}>
-            <div className="input-group">
-              <input type="text" placeholder="ID" value={loginId} onChange={e => setLoginId(e.target.value)} required />
-              <div className="password-wrapper">
-                <input type={showPassword ? "text" : "password"} placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required />
-                <button type="button" onClick={() => setShowPassword(!showPassword)}>{showPassword ? "Hide" : "Show"}</button>
-              </div>
+            <input type="text" placeholder="ID" value={loginId} onChange={e => setLoginId(e.target.value)} required />
+            <div className="password-wrapper">
+              <input type={showPassword ? "text" : "password"} placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required />
+              <button type="button" onClick={() => setShowPassword(!showPassword)}>{showPassword ? "Hide" : "Show"}</button>
             </div>
             <button className="auth-btn" type="submit">Login</button>
           </form>
@@ -128,12 +129,9 @@ function App() {
       
       <aside className="sidebar">
         <h1 className="logo">ClassOptima</h1>
-        <div className="sidebar-section">
-          <label>SESSION</label>
-          <div className="session-card">
-            <p>{SESSIONS[sessionIdx]}</p>
-            <button onClick={() => setSessionIdx(prev => (prev + 1) % 2)}>Switch</button>
-          </div>
+        <div className="session-card">
+          <p>{SESSIONS[sessionIdx]}</p>
+          <button onClick={() => setSessionIdx(prev => (prev + 1) % 2)}>Switch</button>
         </div>
         <nav className="filter-nav">
           {["All", "Classroom", "Lab", "Seminar Hall"].map(cat => (
@@ -147,9 +145,9 @@ function App() {
         <div className="terminal-header">
           <label>SMART ALLOCATION TERMINAL</label>
           <div className="flex-row">
-            <input type="number" placeholder="Enter students..." value={requestCount} onChange={e => setRequestCount(e.target.value)} />
+            <input type="number" placeholder="Enter students (e.g. 99)..." value={requestCount} onChange={e => setRequestCount(e.target.value)} />
             <button className="btn-analyze" onClick={handleAnalyze}>Analyze</button>
-            <button className="btn-auto" onClick={handleWaterfall}>Auto Allocate</button>
+            <button className="btn-auto" onClick={() => handleWaterfallAllocation(rooms[0].id)}>Auto Allocate</button>
           </div>
         </div>
 
@@ -164,9 +162,11 @@ function App() {
                 <div className="fill" style={{ width: `${(room.currentAttendance/room.capacity)*100}%`, background: room.currentAttendance/room.capacity > 0.85 ? '#ef4444' : '#22c55e' }}></div>
               </div>
               <div className="manual-entry-row">
-                <input type="number" value={room.currentAttendance} onChange={(e) => handleManual(room.id, e.target.value)} disabled={role !== 'admin'} />
+                <input type="number" value={room.currentAttendance} onChange={(e) => handleManualUpdate(room.id, e.target.value)} disabled={role !== 'admin'} />
                 <span>/ {room.capacity}</span>
-                {highlights.includes(room.id) && <button className="add-here-btn" onClick={() => accommodateInRoom(room.id)}>Add Here</button>}
+                {highlights.includes(room.id) && (
+                  <button className="add-here-btn" onClick={() => handleWaterfallAllocation(room.id)}>Add Here</button>
+                )}
               </div>
             </div>
           ))}
