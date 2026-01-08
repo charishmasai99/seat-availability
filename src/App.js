@@ -44,48 +44,46 @@ function App() {
     setTimeout(() => setAlert({ show: false, message: "", type: "" }), 6000);
   };
 
-  // 1. ANALYZE: Only highlights available rooms
   const handleAnalyze = () => {
     const count = parseInt(requestCount);
-    if (!count || count <= 0) return triggerAlert("Enter students to analyze", "error");
+    if (!count || count <= 0) return triggerAlert("Enter student count to analyze", "error");
     const availableIds = rooms.filter(r => r.currentAttendance < r.capacity).map(r => r.id);
     setHighlights(availableIds);
-    triggerAlert(`Analysis complete. Select a room to begin allocation.`, "success");
+    triggerAlert(`Analyzing ${count} students. Pick a highlighted room to allot seats.`, "success");
   };
 
-  // 2. WATERFALL: Start filling from the room where "Add Here" is clicked
-  const handleWaterfallAllocation = (startId) => {
-    let toAssign = parseInt(requestCount);
-    if (!toAssign) return triggerAlert("Enter a count in the terminal first", "error");
+  const handleManualAddHere = (roomId) => {
+    let currentRequest = parseInt(requestCount);
+    if (!currentRequest || currentRequest <= 0) return triggerAlert("Enter a count in the terminal first", "error");
 
-    let totalRequested = toAssign;
-    let details = [];
     let updatedRooms = [...rooms];
-    const startIndex = updatedRooms.findIndex(r => r.id === startId);
+    const roomIdx = updatedRooms.findIndex(r => r.id === roomId);
+    const room = updatedRooms[roomIdx];
+    
+    let availableSpace = room.capacity - room.currentAttendance;
 
-    for (let i = startIndex; i < updatedRooms.length; i++) {
-      let room = updatedRooms[i];
-      let space = room.capacity - room.currentAttendance;
-
-      if (toAssign > 0 && space > 0) {
-        let taking = Math.min(space, toAssign);
-        toAssign -= taking;
-        updatedRooms[i].currentAttendance += taking;
-        updatedRooms[i].status = updatedRooms[i].currentAttendance >= updatedRooms[i].capacity ? "Occupied" : "Available";
-        details.push(`${updatedRooms[i].name} (+${taking})`);
-      }
-      if (toAssign === 0) break;
+    if (availableSpace <= 0) {
+        return triggerAlert(`${room.name} is already full!`, "error");
     }
 
-    setRooms(updatedRooms);
-    setRequestCount("");
-    setHighlights([]);
+    let allocatedInThisRoom = Math.min(availableSpace, currentRequest);
+    let remainingStudents = currentRequest - allocatedInThisRoom;
 
-    if (toAssign === 0) {
-      triggerAlert(`Allocation Successful! Placed in: ${details.join(", ")}`, "success");
+    updatedRooms[roomIdx] = {
+      ...room,
+      currentAttendance: room.currentAttendance + allocatedInThisRoom,
+      status: (room.currentAttendance + allocatedInThisRoom) >= room.capacity ? "Occupied" : "Available"
+    };
+
+    setRooms(updatedRooms);
+    
+    if (remainingStudents > 0) {
+      setRequestCount(remainingStudents.toString()); 
+      triggerAlert(`Added ${allocatedInThisRoom} to ${room.name}. ${remainingStudents} students still remaining. Pick the next room!`, "warning");
     } else {
-      const placed = totalRequested - toAssign;
-      triggerAlert(`Partial Success: ${placed} placed. ${toAssign} students left (Venue Full)!`, "warning");
+      setRequestCount(""); 
+      setHighlights([]);
+      triggerAlert(`Successfully allocated all students!`, "success");
     }
   };
 
@@ -108,14 +106,14 @@ function App() {
             </div>
           ) : (
             <form onSubmit={(e) => doLogin(e, authMode)}>
-              <h3>{authMode === 'admin' ? 'ORGANIZER' : 'ATTENDEE'} LOGIN</h3>
+              <h3>{authMode.toUpperCase()} LOGIN</h3>
               <input type="text" placeholder="ID" value={loginId} onChange={e => setLoginId(e.target.value)} required />
               <div className="password-wrapper">
                 <input type={showPassword ? "text" : "password"} placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required />
                 <button type="button" onClick={() => setShowPassword(!showPassword)}>{showPassword ? "Hide" : "Show"}</button>
               </div>
               <button className="auth-btn" type="submit">Login</button>
-              <p className="back-link" onClick={() => setAuthMode("select")}>← Back</p>
+              <p className="back-link" onClick={() => setAuthMode("select")}>← Back to Selection</p>
             </form>
           )}
         </div>
@@ -152,7 +150,6 @@ function App() {
           <div className="flex-row">
             <input type="number" placeholder="Enter students (e.g. 99)..." value={requestCount} onChange={e => setRequestCount(e.target.value)} />
             <button className="btn-analyze" onClick={handleAnalyze}>Analyze</button>
-            <button className="btn-auto" onClick={() => handleWaterfallAllocation(rooms[0].id)}>Auto Allocate</button>
           </div>
         </div>
 
@@ -175,7 +172,7 @@ function App() {
                   <span>/ {room.capacity}</span>
                 </div>
                 {highlights.includes(room.id) && (
-                  <button className="add-here-btn" onClick={() => handleWaterfallAllocation(room.id)}>Add Here</button>
+                  <button className="add-here-btn" onClick={() => handleManualAddHere(room.id)}>Add Here</button>
                 )}
               </div>
             </div>
