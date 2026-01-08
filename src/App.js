@@ -17,6 +17,7 @@ const SESSIONS = ["Morning Session", "Afternoon Session"];
 
 function App() {
   const [role, setRole] = useState(null); 
+  const [authMode, setAuthMode] = useState("select"); // Restored selection mode
   const [rooms, setRooms] = useState([]);
   const [sessionIdx, setSessionIdx] = useState(0);
   const [filter, setFilter] = useState("All");
@@ -29,7 +30,6 @@ function App() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  // Initialize with Random Strengths on load and session change
   useEffect(() => {
     const randomized = INITIAL_ROOMS.map(room => ({
       ...room,
@@ -37,7 +37,6 @@ function App() {
       status: "Available"
     }));
     setRooms(randomized);
-    setHighlights([]);
   }, [sessionIdx]);
 
   const triggerAlert = (msg, type) => {
@@ -45,32 +44,22 @@ function App() {
     setTimeout(() => setAlert({ show: false, message: "", type: "" }), 6000);
   };
 
-  // ANALYZE: Highlight all rooms with available space
   const handleAnalyze = () => {
     const count = parseInt(requestCount);
     if (!count || count <= 0) return triggerAlert("Enter students to analyze", "error");
-    
-    const availableIds = rooms
-      .filter(r => r.currentAttendance < r.capacity)
-      .map(r => r.id);
-    
+    const availableIds = rooms.filter(r => r.currentAttendance < r.capacity).map(r => r.id);
     setHighlights(availableIds);
-    triggerAlert(`Analyze complete. Select 'Add Here' on a room to start waterfall for ${count} students.`, "success");
   };
 
-  // WATERFALL LOGIC: Fills rooms sequentially starting from a specific ID
-  const handleWaterfallAllocation = (startId) => {
+  const handleWaterfall = (startId) => {
     let toAssign = parseInt(requestCount);
-    if (!toAssign) return triggerAlert("Enter a count first", "error");
-
+    if (!toAssign) return;
     let details = [];
     let updatedRooms = [...rooms];
     const startIndex = updatedRooms.findIndex(r => r.id === startId);
 
     for (let i = startIndex; i < updatedRooms.length; i++) {
-      let room = updatedRooms[i];
-      let space = room.capacity - room.currentAttendance;
-
+      let space = updatedRooms[i].capacity - updatedRooms[i].currentAttendance;
       if (toAssign > 0 && space > 0) {
         let taking = Math.min(space, toAssign);
         toAssign -= taking;
@@ -80,43 +69,42 @@ function App() {
       }
       if (toAssign === 0) break;
     }
-
     setRooms(updatedRooms);
     setRequestCount("");
     setHighlights([]);
-
-    if (toAssign === 0) {
-      triggerAlert(`Waterfall Successful: ${details.join(", ")}`, "success");
-    } else {
-      triggerAlert(`Partial Success: ${details.join(", ")}. ${toAssign} students remaining.`, "warning");
-    }
+    triggerAlert(`Waterfall Successful: ${details.join(", ")}`, "success");
   };
 
-  const handleManualUpdate = (id, val) => {
-    const num = parseInt(val) || 0;
-    setRooms(prev => prev.map(r => (r.id === id ? { ...r, currentAttendance: Math.min(num, r.capacity), status: num >= r.capacity ? "Occupied" : "Available" } : r)));
-  };
-
-  const doLogin = (e) => {
+  const doLogin = (e, mode) => {
     e.preventDefault();
-    if (loginId === 'admin123' && password === 'college@2025') setRole('admin');
-    else if (loginId && password) setRole('user');
-    else triggerAlert("Invalid credentials", "error");
+    if (mode === 'admin' && loginId === 'admin123' && password === 'college@2025') setRole('admin');
+    else if (mode === 'student' && loginId && password) setRole('user');
+    else alert("Invalid Credentials");
   };
 
+  // RESTORED LOGIN PORTAL
   if (!role) {
     return (
       <div className="login-screen">
         <div className="login-card">
           <h1>ClassOptima</h1>
-          <form onSubmit={doLogin}>
-            <input type="text" placeholder="ID" value={loginId} onChange={e => setLoginId(e.target.value)} required />
-            <div className="password-wrapper">
-              <input type={showPassword ? "text" : "password"} placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required />
-              <button type="button" onClick={() => setShowPassword(!showPassword)}>{showPassword ? "Hide" : "Show"}</button>
+          {authMode === "select" ? (
+            <div className="login-options">
+              <button className="auth-btn" onClick={() => setAuthMode("admin")}>Organizer Login</button>
+              <button className="auth-btn secondary" onClick={() => setAuthMode("student")}>Attendee Access</button>
             </div>
-            <button className="auth-btn" type="submit">Login</button>
-          </form>
+          ) : (
+            <form onSubmit={(e) => doLogin(e, authMode)}>
+              <h3>{authMode === 'admin' ? 'ORGANIZER' : 'ATTENDEE'} LOGIN</h3>
+              <input type="text" placeholder="ID" value={loginId} onChange={e => setLoginId(e.target.value)} required />
+              <div className="password-wrapper">
+                <input type={showPassword ? "text" : "password"} placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required />
+                <button type="button" onClick={() => setShowPassword(!showPassword)}>{showPassword ? "Hide" : "Show"}</button>
+              </div>
+              <button className="auth-btn" type="submit">Login</button>
+              <p className="back-link" onClick={() => setAuthMode("select")}>← Back to Selection</p>
+            </form>
+          )}
         </div>
       </div>
     );
@@ -147,7 +135,7 @@ function App() {
           <div className="flex-row">
             <input type="number" placeholder="Enter students (e.g. 99)..." value={requestCount} onChange={e => setRequestCount(e.target.value)} />
             <button className="btn-analyze" onClick={handleAnalyze}>Analyze</button>
-            <button className="btn-auto" onClick={() => handleWaterfallAllocation(rooms[0].id)}>Auto Allocate</button>
+            <button className="btn-auto" onClick={() => handleWaterfall(rooms[0].id)}>Auto Allocate</button>
           </div>
         </div>
 
@@ -162,10 +150,13 @@ function App() {
                 <div className="fill" style={{ width: `${(room.currentAttendance/room.capacity)*100}%`, background: room.currentAttendance/room.capacity > 0.85 ? '#ef4444' : '#22c55e' }}></div>
               </div>
               <div className="manual-entry-row">
-                <input type="number" value={room.currentAttendance} onChange={(e) => handleManualUpdate(room.id, e.target.value)} disabled={role !== 'admin'} />
+                <input type="number" value={room.currentAttendance} onChange={(e) => {
+                  const val = Math.min(parseInt(e.target.value) || 0, room.capacity);
+                  setRooms(prev => prev.map(r => r.id === room.id ? {...r, currentAttendance: val, status: val >= r.capacity ? 'Occupied' : 'Available'} : r));
+                }} disabled={role !== 'admin'} />
                 <span>/ {room.capacity}</span>
                 {highlights.includes(room.id) && (
-                  <button className="add-here-btn" onClick={() => handleWaterfallAllocation(room.id)}>Add Here</button>
+                  <button className="add-here-btn" onClick={() => handleWaterfall(room.id)}>Add Here</button>
                 )}
               </div>
             </div>
