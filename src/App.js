@@ -3,7 +3,7 @@ import { initializeApp } from "firebase/app";
 import { getDatabase, ref, onValue, set, update } from "firebase/database";
 import "./App.css";
 
-// 1. REPLACE WITH YOUR UNIQUE FIREBASE CONFIG
+// --- PASTE YOUR ACTUAL FIREBASE CONFIG KEYS HERE ---
 const firebaseConfig = {
   apiKey: "YOUR_API_KEY",
   authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
@@ -14,7 +14,6 @@ const firebaseConfig = {
   appId: "YOUR_APP_ID"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
@@ -32,57 +31,54 @@ function App() {
   const [authMode, setAuthMode] = useState("select"); 
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false); // Password Visibility State
 
-  // 2. LIVE DATA SYNC
+  // LIVE SYNC & AUTO-SEED LOGIC
   useEffect(() => {
     const roomsRef = ref(db, 'rooms');
-    const unsubscribeRooms = onValue(roomsRef, (snapshot) => {
+    onValue(roomsRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
+        // Data exists: Sync to UI
         const roomList = Object.keys(data).map(key => ({
           ...data[key],
           fbKey: key 
         }));
         setRooms(roomList);
+      } else {
+        // IF DATABASE IS EMPTY: Seed with Random Initial Allotments
+        const initialRooms = {};
+        const roomNames = ["G-8 CSE A", "G-9 CSE B", "G-11 CSE C", "G-7 AI Nexus Lab", "G-13 Lab", "G-10 Seminar Hall"];
+        
+        roomNames.forEach((name, i) => {
+          const cap = name.includes("Seminar") ? 150 : 72;
+          const randomAttendance = Math.floor(Math.random() * (cap * 0.45)); // Start with 0-45% random occupancy
+          initialRooms[`room_${i + 1}`] = {
+            id: i + 1,
+            name: name,
+            category: name.includes("Lab") ? "Lab" : name.includes("Hall") ? "Seminar Hall" : "Classroom",
+            capacity: cap,
+            currentAttendance: randomAttendance,
+            status: "Available"
+          };
+        });
+        set(ref(db, 'rooms'), initialRooms);
       }
     });
 
-    const sessionRef = ref(db, 'currentSession');
-    const unsubscribeSession = onValue(sessionRef, (snap) => {
-      setSessionIdx(snap.val() || 0);
-    });
-
-    return () => {
-      unsubscribeRooms();
-      unsubscribeSession();
-    };
+    onValue(ref(db, 'currentSession'), (snap) => setSessionIdx(snap.val() || 0));
   }, []);
-
-  // 3. AUTHENTICATION
-  const doLogin = (e, type) => {
-    e.preventDefault();
-    if (type === 'admin' && loginId === 'admin123' && password === 'college@2025') {
-      setRole('admin');
-    } else if (type === 'student' && loginId && password) {
-      setRole('user');
-    } else {
-      alert("Invalid Credentials");
-    }
-  };
 
   const getRiskColor = (r) => {
     const ratio = r.currentAttendance / r.capacity;
     return ratio > 0.85 ? "#ef4444" : ratio > 0.6 ? "#f59e0b" : "#22c55e";
   };
 
-  // 4. CLOUD ALLOCATION
   const autoAllocate = () => {
     let remaining = parseInt(requestCount);
-    if (!remaining || remaining <= 0) return alert("Enter count");
-    
+    if (!remaining || remaining <= 0) return alert("Enter attendee count");
     const updates = {};
     const sorted = [...rooms].sort((a,b) => (b.capacity - b.currentAttendance) - (a.capacity - a.currentAttendance));
-    
     sorted.forEach(room => {
       const space = room.capacity - room.currentAttendance;
       if (remaining > 0 && space > 0) {
@@ -93,10 +89,9 @@ function App() {
         updates[`rooms/${room.fbKey}/status`] = newTotal >= room.capacity ? "Occupied" : "Available";
       }
     });
-
     update(ref(db), updates);
     setRequestCount("");
-    setModal({ show: true, type: "success", message: "Cloud Sync Complete!" });
+    setModal({ show: true, type: "success", message: "Live Cloud Allocation Synced!" });
   };
 
   const modifyAttendance = (fbKey, delta) => {
@@ -108,11 +103,18 @@ function App() {
     });
   };
 
+  const doLogin = (e, type) => {
+    e.preventDefault();
+    if (type === 'admin' && loginId === 'admin123' && password === 'college@2025') setRole('admin');
+    else if (type === 'student' && loginId && password) setRole('user');
+    else alert("Invalid Credentials");
+  };
+
   if (!role) {
     return (
       <div className="login-screen">
         <div className="login-card">
-          <h1 className="logo-text">ClassOptima <span>LIVE</span></h1>
+          <h1 className="logo-text">ClassOptima <span>PRO</span></h1>
           {authMode === "select" ? (
             <div className="login-options">
               <button className="auth-btn" onClick={() => setAuthMode("admin")}>Organizer Login</button>
@@ -123,9 +125,24 @@ function App() {
               <h3>{authMode.toUpperCase()} PORTAL</h3>
               <div className="input-group">
                 <input type="text" placeholder="ID / Username" value={loginId} onChange={e => setLoginId(e.target.value)} required />
-                <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required />
+                <div className="password-wrapper">
+                  <input 
+                    type={showPassword ? "text" : "password"} 
+                    placeholder="Password" 
+                    value={password} 
+                    onChange={e => setPassword(e.target.value)} 
+                    required 
+                  />
+                  <button 
+                    type="button" 
+                    className="toggle-password" 
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
               </div>
-              <button className="auth-btn" type="submit">Login to Dashboard</button>
+              <button className="auth-btn" type="submit">Login</button>
               <p onClick={() => setAuthMode("select")} className="back-link">← Back</p>
             </form>
           )}
@@ -143,7 +160,7 @@ function App() {
         <div className="modal-overlay">
           <div className="modal-box">
             <p>{modal.message}</p>
-            <button className="modal-close-btn" onClick={() => setModal({ ...modal, show: false })}>Continue</button>
+            <button className="modal-close-btn" onClick={() => setModal({ ...modal, show: false })}>Acknowledge</button>
           </div>
         </div>
       )}
@@ -170,12 +187,12 @@ function App() {
           )}
         </div>
         <div className="global-stats">
-          <small className="sidebar-label" style={{color: 'rgba(255,255,255,0.6)'}}>VENUE LOAD</small>
+          <small className="sidebar-label" style={{color: 'rgba(255,255,255,0.6)'}}>BUILDING LOAD</small>
           <h2>{totalAtt} <span style={{fontSize:'14px', opacity: 0.7}}>/ {totalCap}</span></h2>
           <div className="progress-track" style={{height:'4px', background: 'rgba(255,255,255,0.1)'}}>
             <div className="progress-fill" style={{width:`${(totalAtt/totalCap)*100}%`, background: '#fff'}}></div>
           </div>
-          <button onClick={() => setRole(null)} className="logout-link">Logout System</button>
+          <button onClick={() => {setRole(null); localStorage.removeItem('userRole')}} className="logout-link">Logout System</button>
         </div>
       </aside>
 
@@ -184,8 +201,12 @@ function App() {
             <label className="hero-label">Live Waterfall Allotment</label>
             <div className="allocation-input-group">
                 <input type="number" placeholder="Enter students..." value={requestCount} onChange={e => setRequestCount(e.target.value)} />
-                <button className="hero-btn" onClick={() => setHighlights(rooms.filter(r => r.currentAttendance < r.capacity).map(r => r.id))}>Analyze</button>
-                <button className="hero-btn" style={{background: '#8b5cf6'}} onClick={autoAllocate}>Sync Allotment</button>
+                {role === 'admin' && (
+                  <>
+                    <button className="hero-btn" onClick={() => setHighlights(rooms.filter(r => r.currentAttendance < r.capacity).map(r => r.id))}>Analyze</button>
+                    <button className="hero-btn" style={{background: '#8b5cf6'}} onClick={autoAllocate}>Sync Allotment</button>
+                  </>
+                )}
             </div>
         </div>
 
