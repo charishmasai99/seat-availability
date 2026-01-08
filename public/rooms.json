@@ -1,0 +1,11 @@
+{
+  "room_1": { "id": 1, "name": "G-8 CSE A", "category": "Classroom", "capacity": 72, "currentAttendance": 0, "status": "Available" },
+  "room_2": { "id": 2, "name": "G-9 CSE B", "category": "Classroom", "capacity": 72, "currentAttendance": 0, "status": "Available" },
+  "room_3": { "id": 3, "name": "G-11 CSE C", "category": "Classroom", "capacity": 72, "currentAttendance": 0, "status": "Available" },
+  "room_4": { "id": 4, "name": "G-12 CSE D", "category": "Classroom", "capacity": 72, "currentAttendance": 0, "status": "Available" },
+  "room_5": { "id": 5, "name": "G-15 CSE E", "category": "Classroom", "capacity": 72, "currentAttendance": 0, "status": "Available" },
+  "room_6": { "id": 6, "name": "G-16 CSE F", "category": "Classroom", "capacity": 72, "currentAttendance": 0, "status": "Available" },
+  "room_7": { "id": 7, "name": "G-7 AI Nexus Lab", "category": "Lab", "capacity": 72, "currentAttendance": 0, "status": "Available" },
+  "room_8": { "id": 8, "name": "G-13/14 Combined Lab", "category": "Lab", "capacity": 134, "currentAttendance": 0, "status": "Available" },
+  "room_9": { "id": 9, "name": "G-10 Seminar Hall 1", "category": "Seminar Hall", "capacity": 90, "currentAttendance": 0, "status": "Available" }
+}
