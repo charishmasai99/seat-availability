@@ -25,7 +25,6 @@ function App() {
   const [highlights, setHighlights] = useState([]); 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [alert, setAlert] = useState({ show: false, message: "", type: "" });
-  
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -46,52 +45,70 @@ function App() {
 
   const handleAnalyze = () => {
     const count = parseInt(requestCount);
-    if (!count || count <= 0) return triggerAlert("Enter student count to analyze", "error");
-    const availableIds = rooms.filter(r => r.currentAttendance < r.capacity).map(r => r.id);
-    setHighlights(availableIds);
-    triggerAlert(`Analyzing ${count} students. Pick a highlighted room to allot seats.`, "success");
+    if (!count || count <= 0) return triggerAlert("Enter students to analyze", "error");
+    setHighlights(rooms.filter(r => r.currentAttendance < r.capacity).map(r => r.id));
+    triggerAlert(`Analyzing ${count} students. Pick a room to start allocation.`, "success");
   };
 
   const handleManualAddHere = (roomId) => {
+    if (role !== 'admin') return triggerAlert("Only Organizers can allot students", "error");
     let currentRequest = parseInt(requestCount);
-    if (!currentRequest || currentRequest <= 0) return triggerAlert("Enter a count in the terminal first", "error");
+    if (!currentRequest) return;
 
     let updatedRooms = [...rooms];
     const roomIdx = updatedRooms.findIndex(r => r.id === roomId);
-    const room = updatedRooms[roomIdx];
-    
-    let availableSpace = room.capacity - room.currentAttendance;
+    let space = updatedRooms[roomIdx].capacity - updatedRooms[roomIdx].currentAttendance;
 
-    if (availableSpace <= 0) {
-        return triggerAlert(`${room.name} is already full!`, "error");
-    }
+    if (space <= 0) return triggerAlert("Room is full!", "error");
 
-    let allocatedInThisRoom = Math.min(availableSpace, currentRequest);
-    let remainingStudents = currentRequest - allocatedInThisRoom;
+    let taking = Math.min(space, currentRequest);
+    let remaining = currentRequest - taking;
 
-    updatedRooms[roomIdx] = {
-      ...room,
-      currentAttendance: room.currentAttendance + allocatedInThisRoom,
-      status: (room.currentAttendance + allocatedInThisRoom) >= room.capacity ? "Occupied" : "Available"
-    };
+    updatedRooms[roomIdx].currentAttendance += taking;
+    updatedRooms[roomIdx].status = updatedRooms[roomIdx].currentAttendance >= updatedRooms[roomIdx].capacity ? "Occupied" : "Available";
 
     setRooms(updatedRooms);
+    setRequestCount(remaining > 0 ? remaining.toString() : "");
     
-    if (remainingStudents > 0) {
-      setRequestCount(remainingStudents.toString()); 
-      triggerAlert(`Added ${allocatedInThisRoom} to ${room.name}. ${remainingStudents} students still remaining. Pick the next room!`, "warning");
+    if (remaining === 0) {
+        setHighlights([]);
+        triggerAlert(`Success! All students allocated. SMS sent to Admin and Students.`, "success");
     } else {
-      setRequestCount(""); 
-      setHighlights([]);
-      triggerAlert(`Successfully allocated all students!`, "success");
+        triggerAlert(`${remaining} students remaining. Pick the next room!`, "warning");
     }
+  };
+
+  const handleAutoAllocate = () => {
+    if (role !== 'admin') return triggerAlert("Only Admin can Auto Allocate", "error");
+    let toAssign = parseInt(requestCount);
+    if (!toAssign) return;
+    
+    let updatedRooms = [...rooms];
+    for (let i = 0; i < updatedRooms.length; i++) {
+      let space = updatedRooms[i].capacity - updatedRooms[i].currentAttendance;
+      if (toAssign > 0 && space > 0) {
+        let taking = Math.min(space, toAssign);
+        toAssign -= taking;
+        updatedRooms[i].currentAttendance += taking;
+        updatedRooms[i].status = updatedRooms[i].currentAttendance >= updatedRooms[i].capacity ? "Occupied" : "Available";
+      }
+    }
+    setRooms(updatedRooms);
+    setRequestCount(toAssign > 0 ? toAssign.toString() : "");
+    triggerAlert("Auto Allocation Successful!", "success");
   };
 
   const doLogin = (e, mode) => {
     e.preventDefault();
-    if (mode === 'admin' && loginId === 'admin123' && password === 'college@2025') setRole('admin');
-    else if (mode === 'student' && loginId && password) setRole('user');
-    else triggerAlert("Invalid credentials", "error");
+    if (mode === 'admin') {
+      if (loginId === 'admin123' && password === 'college@2025') {
+        setRole('admin');
+      } else {
+        alert("Invalid Admin Credentials");
+      }
+    } else {
+      setRole('student');
+    }
   };
 
   if (!role) {
@@ -110,7 +127,7 @@ function App() {
               <input type="text" placeholder="ID" value={loginId} onChange={e => setLoginId(e.target.value)} required />
               <div className="password-wrapper">
                 <input type={showPassword ? "text" : "password"} placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required />
-                <button type="button" onClick={() => setShowPassword(!showPassword)}>{showPassword ? "Hide" : "Show"}</button>
+                <button type="button" onClick={() => setShowPassword(!showPassword)}>{showPassword ? "👁" : "🔒"}</button>
               </div>
               <button className="auth-btn" type="submit">Login</button>
               <p className="back-link" onClick={() => setAuthMode("select")}>← Back to Selection</p>
@@ -138,10 +155,14 @@ function App() {
         <nav className="filter-nav">
           <label>CATEGORIES</label>
           {["All", "Classroom", "Lab", "Seminar Hall"].map(cat => (
-            <button key={cat} className={filter === cat ? "active" : ""} onClick={() => {setFilter(cat); setIsSidebarOpen(false);}}>{cat}</button>
+            <button key={cat} className={filter === cat ? "active" : ""} onClick={() => setFilter(cat)}>{cat}</button>
           ))}
         </nav>
-        <button className="logout-btn" onClick={() => setRole(null)}>Logout</button>
+        <div className="venue-load">
+            <small>ROLE: {role.toUpperCase()}</small>
+            <h2>{rooms.reduce((a,b)=>a+b.currentAttendance,0)} / 728</h2>
+        </div>
+        <button className="logout-btn" onClick={() => {setRole(null); setAuthMode("select");}}>Logout</button>
       </aside>
 
       <main className="content">
@@ -150,6 +171,7 @@ function App() {
           <div className="flex-row">
             <input type="number" placeholder="Enter students (e.g. 99)..." value={requestCount} onChange={e => setRequestCount(e.target.value)} />
             <button className="btn-analyze" onClick={handleAnalyze}>Analyze</button>
+            {role === 'admin' && <button className="btn-auto" onClick={handleAutoAllocate}>Auto Allocate</button>}
           </div>
         </div>
 
@@ -166,12 +188,13 @@ function App() {
               <div className="card-footer">
                 <div className="manual-input">
                   <input type="number" value={room.currentAttendance} onChange={(e) => {
+                    if (role !== 'admin') return;
                     const val = Math.min(parseInt(e.target.value) || 0, room.capacity);
                     setRooms(prev => prev.map(r => r.id === room.id ? {...r, currentAttendance: val, status: val >= r.capacity ? 'Occupied' : 'Available'} : r));
-                  }} disabled={role !== 'admin'} />
+                  }} readOnly={role !== 'admin'} />
                   <span>/ {room.capacity}</span>
                 </div>
-                {highlights.includes(room.id) && (
+                {highlights.includes(room.id) && role === 'admin' && (
                   <button className="add-here-btn" onClick={() => handleManualAddHere(room.id)}>Add Here</button>
                 )}
               </div>
