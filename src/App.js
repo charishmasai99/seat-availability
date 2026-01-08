@@ -29,10 +29,11 @@ function App() {
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
-    const randomized = INITIAL_ROOMS.map(room => {
-      const randomStart = Math.floor(Math.random() * (room.capacity * 0.45));
-      return { ...room, currentAttendance: randomStart, status: "Available" };
-    });
+    const randomized = INITIAL_ROOMS.map(room => ({
+      ...room,
+      currentAttendance: Math.floor(Math.random() * (room.capacity * 0.45)),
+      status: "Available"
+    }));
     setRooms(randomized);
   }, [sessionIdx]);
 
@@ -41,46 +42,42 @@ function App() {
     setTimeout(() => setAlert({ show: false, message: "", type: "" }), 6000);
   };
 
-  // WATERFALL ALLOCATION LOGIC
-  const handleWaterfallAllocation = () => {
+  // AUTO-ALLOCATE (Waterfall Logic)
+  const handleAutoAllocate = () => {
     let toAssign = parseInt(requestCount);
-    if (!toAssign || toAssign <= 0) return triggerAlert("Please enter a valid student count", "error");
+    if (!toAssign || toAssign <= 0) return triggerAlert("Enter a valid number", "error");
 
-    let totalOriginalRequest = toAssign;
-    let allocatedDetails = [];
+    let totalRequested = toAssign;
+    let details = [];
     let updatedRooms = [...rooms];
 
     for (let i = 0; i < updatedRooms.length; i++) {
       let room = updatedRooms[i];
-      let availableSpace = room.capacity - room.currentAttendance;
+      let space = room.capacity - room.currentAttendance;
 
-      if (toAssign > 0 && availableSpace > 0) {
-        let taking = Math.min(availableSpace, toAssign);
+      if (toAssign > 0 && space > 0) {
+        let taking = Math.min(space, toAssign);
         toAssign -= taking;
-        
         updatedRooms[i] = {
           ...room,
           currentAttendance: room.currentAttendance + taking,
           status: (room.currentAttendance + taking) >= room.capacity ? "Occupied" : "Available"
         };
-        
-        allocatedDetails.push(`${room.name} (+${taking})`);
+        details.push(`${room.name} (+${taking})`);
       }
       if (toAssign === 0) break;
     }
 
     setRooms(updatedRooms);
     setRequestCount("");
-
     if (toAssign === 0) {
-      triggerAlert(`Success: ${totalOriginalRequest} students placed in ${allocatedDetails.join(", ")}`, "success");
-    } else if (toAssign < totalOriginalRequest) {
-      triggerAlert(`Partial: ${totalOriginalRequest - toAssign} students placed. ${toAssign} couldn't fit (Venue Full).`, "warning");
+      triggerAlert(`Auto-Allocated ${totalRequested} students: ${details.join(", ")}`, "success");
     } else {
-      triggerAlert("Failed: No available space in any room.", "error");
+      triggerAlert(`Partial allocation. ${toAssign} students left (Venue Full).`, "warning");
     }
   };
 
+  // MANUAL ADDITION (Per Room)
   const handleManualEntry = (id, val) => {
     const num = parseInt(val) || 0;
     setRooms(prev => prev.map(r => 
@@ -100,15 +97,13 @@ function App() {
       <div className="login-screen">
         {alert.show && <div className={`global-alert ${alert.type}`}>{alert.message}</div>}
         <div className="login-card">
-          <h1 className="logo-text">ClassOptima <span>PRO</span></h1>
+          <h1>ClassOptima</h1>
           <form onSubmit={doLogin}>
             <div className="input-group">
               <input type="text" placeholder="ID" value={loginId} onChange={e => setLoginId(e.target.value)} required />
               <div className="password-wrapper">
                 <input type={showPassword ? "text" : "password"} placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required />
-                <button type="button" className="toggle-password" onClick={() => setShowPassword(!showPassword)}>
-                  {showPassword ? "Hide" : "Show"}
-                </button>
+                <button type="button" onClick={() => setShowPassword(!showPassword)}>{showPassword ? "Hide" : "Show"}</button>
               </div>
             </div>
             <button className="auth-btn" type="submit">Login</button>
@@ -144,8 +139,8 @@ function App() {
         <div className="terminal-header">
           <label>SMART ALLOCATION TERMINAL</label>
           <div className="flex-row">
-            <input type="number" placeholder="Enter students (e.g., 99)..." value={requestCount} onChange={e => setRequestCount(e.target.value)} />
-            <button className="btn-allot-main" onClick={handleWaterfallAllocation}>Allot Students</button>
+            <input type="number" placeholder="Enter students to auto-allocate..." value={requestCount} onChange={e => setRequestCount(e.target.value)} />
+            <button className="btn-auto" onClick={handleAutoAllocate}>Auto Allocate</button>
           </div>
         </div>
 
@@ -153,17 +148,16 @@ function App() {
           {rooms.filter(r => filter === "All" || r.category === filter).map(room => (
             <div key={room.id} className="room-card">
               <div className="card-top">
-                <div><span className="cat-tag">{room.category}</span><h4>{room.name}</h4></div>
+                <h4>{room.name}</h4>
                 <span className={`status ${room.status.toLowerCase()}`}>{room.status}</span>
               </div>
               <div className="progress-bar">
                 <div className="fill" style={{ width: `${(room.currentAttendance/room.capacity)*100}%`, background: room.currentAttendance/room.capacity > 0.85 ? '#ef4444' : '#22c55e' }}></div>
               </div>
-              <div className="card-footer">
-                <div className="manual-input">
-                  <input type="number" value={room.currentAttendance} onChange={(e) => handleManualEntry(room.id, e.target.value)} disabled={role !== 'admin'} />
-                  <span>/ {room.capacity}</span>
-                </div>
+              <div className="manual-entry-row">
+                <label>Manual Update:</label>
+                <input type="number" value={room.currentAttendance} onChange={(e) => handleManualEntry(room.id, e.target.value)} disabled={role !== 'admin'} />
+                <span>/ {room.capacity}</span>
               </div>
             </div>
           ))}
