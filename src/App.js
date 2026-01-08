@@ -16,72 +16,77 @@ const INITIAL_ROOMS = [
 const SESSIONS = ["Morning Session", "Afternoon Session"];
 
 function App() {
-  const [role, setRole] = useState('admin'); // Set to 'admin' for full control access
+  const [role, setRole] = useState(null); // NULL forces the Login Page to show first
   const [rooms, setRooms] = useState([]);
   const [sessionIdx, setSessionIdx] = useState(0);
   const [filter, setFilter] = useState("All");
   const [requestCount, setRequestCount] = useState("");
   const [availableHighlights, setAvailableHighlights] = useState([]); 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
+  const [authMode, setAuthMode] = useState("select"); 
+  const [loginId, setLoginId] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
-  // Initialize with Random Initial Strengths on session change
+  // Auto-Randomize strength on session change
   useEffect(() => {
-    const randomized = INITIAL_ROOMS.map(room => {
-      const randomStart = Math.floor(Math.random() * (room.capacity * 0.45));
-      return { ...room, currentAttendance: randomStart, status: "Available" };
-    });
+    const randomized = INITIAL_ROOMS.map(room => ({
+      ...room,
+      currentAttendance: Math.floor(Math.random() * (room.capacity * 0.45)),
+      status: "Available"
+    }));
     setRooms(randomized);
     setAvailableHighlights([]);
   }, [sessionIdx]);
 
-  // STEP 1: Analyze specific rooms that fit the request
   const handleAnalyze = () => {
     const count = parseInt(requestCount);
     if (!count || count <= 0) return alert("Please enter the number of students first.");
-    
-    const matchingIds = rooms
-      .filter(r => (r.capacity - r.currentAttendance) >= count)
-      .map(r => r.id);
-    
+    const matchingIds = rooms.filter(r => (r.capacity - r.currentAttendance) >= count).map(r => r.id);
     setAvailableHighlights(matchingIds);
-    if (matchingIds.length === 0) alert("No single room has enough space for this group.");
+    if (matchingIds.length === 0) alert("No room has enough space.");
   };
 
-  // STEP 2: Manually accommodate students into a chosen highlighted room
   const accommodateInRoom = (id) => {
     const count = parseInt(requestCount);
-    setRooms(prev => prev.map(r => {
-      if (r.id === id) {
-        const newTotal = r.currentAttendance + count;
-        return { ...r, currentAttendance: newTotal, status: newTotal >= r.capacity ? "Occupied" : "Available" };
-      }
-      return r;
-    }));
+    setRooms(prev => prev.map(r => (r.id === id ? { ...r, currentAttendance: r.currentAttendance + count } : r)));
     setRequestCount("");
     setAvailableHighlights([]);
   };
 
-  // Manual Update for Admin (Typing numbers directly)
-  const handleManualEntry = (id, val) => {
-    const num = parseInt(val) || 0;
-    setRooms(prev => prev.map(r => {
-      if (r.id === id) {
-        return { ...r, currentAttendance: Math.min(num, r.capacity), status: num >= r.capacity ? "Occupied" : "Available" };
-      }
-      return r;
-    }));
+  const doLogin = (e) => {
+    e.preventDefault();
+    if (loginId === 'admin123' && password === 'college@2025') setRole('admin');
+    else if (loginId && password) setRole('user');
+    else alert("Invalid Credentials");
   };
+
+  // IF ROLE IS NULL, SHOW LOGIN PAGE
+  if (!role) {
+    return (
+      <div className="login-screen">
+        <div className="login-card">
+          <h1>ClassOptima <span>PRO</span></h1>
+          <form onSubmit={doLogin}>
+            <div className="input-group">
+              <input type="text" placeholder="ID" value={loginId} onChange={e => setLoginId(e.target.value)} required />
+              <div className="password-wrapper">
+                <input type={showPassword ? "text" : "password"} placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required />
+                <button type="button" onClick={() => setShowPassword(!showPassword)}>{showPassword ? "👁" : "🔒"}</button>
+              </div>
+            </div>
+            <button className="auth-btn" type="submit">Login</button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`app-container ${isSidebarOpen ? "sidebar-open" : ""}`}>
-      {/* Mobile Sidebar Toggle */}
-      <button className="mobile-menu-btn" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
-        {isSidebarOpen ? "✕ Close" : "☰ Menu"}
-      </button>
-
+      <button className="mobile-menu-btn" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>☰ Menu</button>
       <aside className="sidebar">
         <h1 className="logo">ClassOptima</h1>
-        
         <div className="sidebar-section">
           <label>SESSION</label>
           <div className="session-card">
@@ -89,83 +94,34 @@ function App() {
             <button onClick={() => setSessionIdx(prev => (prev + 1) % 2)}>Switch</button>
           </div>
         </div>
-
-        <div className="sidebar-section">
-          <label>CATEGORIES</label>
-          <nav className="filter-nav">
-            {["All", "Classroom", "Lab", "Seminar Hall"].map(cat => (
-              <button 
-                key={cat} 
-                className={filter === cat ? "active" : ""} 
-                onClick={() => {setFilter(cat); setIsSidebarOpen(false);}}
-              >
-                {cat}
-              </button>
-            ))}
-          </nav>
-        </div>
-
-        <div className="sidebar-footer">
-          <div className="load-box">
-            <small>TOTAL VENUE LOAD</small>
-            <h3>{rooms.reduce((a,b)=>a+b.currentAttendance,0)} / {rooms.reduce((a,b)=>a+b.capacity,0)}</h3>
-          </div>
-        </div>
+        <nav className="filter-nav">
+          {["All", "Classroom", "Lab", "Seminar Hall"].map(cat => (
+            <button key={cat} className={filter === cat ? "active" : ""} onClick={() => {setFilter(cat); setIsSidebarOpen(false);}}>{cat}</button>
+          ))}
+        </nav>
+        <button onClick={() => setRole(null)} className="logout-btn">Logout</button>
       </aside>
 
       <main className="content">
-        <header className="terminal-header">
-          <div className="input-group">
-            <label>SMART ALLOCATION TERMINAL</label>
-            <div className="flex-row">
-              <input 
-                type="number" 
-                placeholder="Number of students..." 
-                value={requestCount}
-                onChange={e => setRequestCount(e.target.value)}
-              />
-              <button className="btn-analyze" onClick={handleAnalyze}>Analyze</button>
-            </div>
-            {availableHighlights.length > 0 && (
-              <span className="hint pulse">Select a highlighted room below</span>
-            )}
+        <div className="terminal-header">
+          <label>SMART ALLOCATION TERMINAL</label>
+          <div className="flex-row">
+            <input type="number" placeholder="Number of students..." value={requestCount} onChange={e => setRequestCount(e.target.value)} />
+            <button className="btn-analyze" onClick={handleAnalyze}>Analyze</button>
           </div>
-        </header>
+        </div>
 
         <div className="room-grid">
           {rooms.filter(r => filter === "All" || r.category === filter).map(room => (
             <div key={room.id} className={`room-card ${availableHighlights.includes(room.id) ? 'active-highlight' : ''}`}>
               <div className="card-top">
-                <div>
-                  <span className="cat-tag">{room.category}</span>
-                  <h4>{room.name}</h4>
-                </div>
+                <h4>{room.name}</h4>
                 <span className={`status ${room.status.toLowerCase()}`}>{room.status}</span>
               </div>
-              
-              <div className="progress-bar">
-                <div 
-                  className="fill" 
-                  style={{
-                    width: `${(room.currentAttendance/room.capacity)*100}%`,
-                    backgroundColor: room.currentAttendance/room.capacity > 0.8 ? '#ef4444' : '#22c55e'
-                  }}
-                ></div>
-              </div>
-
+              <div className="progress-bar"><div className="fill" style={{ width: `${(room.currentAttendance/room.capacity)*100}%` }}></div></div>
               <div className="card-controls">
-                <div className="manual-input">
-                  <input 
-                    type="number" 
-                    value={room.currentAttendance} 
-                    onChange={(e) => handleManualEntry(room.id, e.target.value)}
-                    disabled={role !== 'admin'}
-                  />
-                  <span>/ {room.capacity}</span>
-                </div>
-                {availableHighlights.includes(room.id) && (
-                  <button className="btn-allot" onClick={() => accommodateInRoom(room.id)}>Add Here</button>
-                )}
+                <span>{room.currentAttendance} / {room.capacity}</span>
+                {availableHighlights.includes(room.id) && <button className="btn-allot" onClick={() => accommodateInRoom(room.id)}>Add Here</button>}
               </div>
             </div>
           ))}
